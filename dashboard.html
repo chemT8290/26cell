@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>K-STATION · MISSION CONTROL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #060a10; --bg-grid: #0a1119; --panel: #0e1620; --panel-2: #101c28;
+    --border: #1c2f3d; --border-bright: #2c4b5e;
+    --cyan: #4ee3c8; --cyan-dim: #2a6e63; --amber: #ffb454; --red: #ff4f5e; --green: #35e58a;
+    --text: #e7f3f5; --text-dim: #7d94a0;
+    --font-display:'Orbitron','Share Tech Mono',monospace;
+    --font-body:'Rajdhani','Segoe UI',sans-serif;
+    --font-mono:'Share Tech Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);}
+  body{
+    font-family:var(--font-body); color:var(--text); min-height:100vh; position:relative; overflow-x:hidden;
+    background:
+      radial-gradient(circle at 15% 10%, rgba(78,227,200,0.06), transparent 40%),
+      radial-gradient(circle at 85% 90%, rgba(255,180,84,0.05), transparent 40%),
+      repeating-linear-gradient(0deg, var(--bg-grid) 0px, var(--bg-grid) 1px, var(--bg) 1px, var(--bg) 32px),
+      repeating-linear-gradient(90deg, var(--bg-grid) 0px, var(--bg-grid) 1px, var(--bg) 1px, var(--bg) 32px),
+      var(--bg);
+  }
+  .scanline{position:fixed; inset:0; pointer-events:none; z-index:5; mix-blend-mode:overlay; opacity:.35;
+    background:repeating-linear-gradient(180deg, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 1px, transparent 1px, transparent 3px);}
+  .vignette{position:fixed; inset:0; pointer-events:none; z-index:4; box-shadow: inset 0 0 160px rgba(0,0,0,0.75);}
+  button{font-family:inherit; cursor:pointer;}
+  input,select{font-family:inherit;}
+  h1,h2,h3{font-family:var(--font-display); font-weight:700; margin:0;}
+  :focus-visible{outline:2px solid var(--cyan); outline-offset:2px;}
+
+  /* ---------- Shared ---------- */
+  .btn{display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:13px 22px; border-radius:2px; border:1px solid var(--cyan);
+    background:rgba(78,227,200,0.08); color:var(--cyan); font-family:var(--font-display); font-size:13px; letter-spacing:1.5px; text-transform:uppercase; transition:all .2s; width:100%;}
+  .btn:hover{background:rgba(78,227,200,0.18); box-shadow:0 0 16px rgba(78,227,200,.25);}
+  .btn:disabled{opacity:.4; cursor:not-allowed;}
+  .btn.secondary{border-color:var(--border-bright); color:var(--text-dim); background:transparent; width:auto; padding:8px 14px; font-size:11px;}
+  .btn.secondary:hover{border-color:var(--text-dim); color:var(--text); box-shadow:none;}
+  .btn.small{width:auto; padding:9px 16px; font-size:11px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-bottom:6px; letter-spacing:1px;}
+  .field input{width:100%; padding:12px 14px; background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:2px; font-size:15px;}
+  .field input:focus{border-color:var(--cyan);}
+  .field .hint{font-family:var(--font-mono); font-size:10px; color:var(--text-dim); margin-top:5px; line-height:1.5;}
+  .msg{font-family:var(--font-mono); font-size:12px; text-align:center; min-height:16px; margin-bottom:8px;}
+  .msg.err{color:var(--red);}
+  .msg.ok{color:var(--green);}
+  .mode-badge{display:inline-block; font-family:var(--font-mono); font-size:9.5px; padding:3px 8px; border-radius:2px; letter-spacing:1px; margin-left:8px;}
+  .mode-badge.live{color:var(--green); border:1px solid rgba(53,229,138,.5);}
+  .mode-badge.demo{color:var(--amber); border:1px solid rgba(255,180,84,.5);}
+
+  /* ---------- Login ---------- */
+  #loginScreen{min-height:100vh; display:flex; align-items:center; justify-content:center; position:relative; z-index:10; padding:20px;}
+  .login-box{width:100%; max-width:400px; background:var(--panel); border:1px solid var(--border-bright); border-radius:2px; padding:30px 26px; position:relative;}
+  .login-box::before, .login-box::after{content:''; position:absolute; width:16px; height:16px; border:2px solid var(--cyan);}
+  .login-box::before{top:-1px; left:-1px; border-right:none; border-bottom:none;}
+  .login-box::after{bottom:-1px; right:-1px; border-left:none; border-top:none;}
+  .login-logo{font-family:var(--font-mono); font-size:12px; color:var(--text-dim); text-align:center; letter-spacing:3px; margin-bottom:8px;}
+  .login-title{font-size:22px; color:var(--cyan); text-align:center; letter-spacing:1px; margin-bottom:6px; text-shadow:0 0 18px rgba(78,227,200,.4);}
+  .login-mode-row{text-align:center; margin-bottom:20px;}
+  .demo-note{font-family:var(--font-mono); font-size:10.5px; color:#425663; text-align:center; margin-top:16px; line-height:1.7; border-top:1px dashed var(--border); padding-top:14px;}
+  .toggle-url-btn{background:none; border:none; color:var(--text-dim); font-family:var(--font-mono); font-size:11px; text-decoration:underline; display:block; margin:0 auto 14px; text-align:center;}
+  .toggle-url-btn:hover{color:var(--cyan);}
+  .url-box{display:none; margin-bottom:6px;}
+  .url-box.show{display:block;}
+
+  /* ---------- Dashboard ---------- */
+  #dashboardScreen{display:none; position:relative; z-index:10; max-width:1080px; margin:0 auto; padding:20px 18px 60px;}
+  .dash-header{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:18px; flex-wrap:wrap;}
+  .dash-title{font-size:20px; color:var(--cyan); letter-spacing:1px;}
+  .dash-sub{font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-top:4px;}
+  .dash-actions{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .refresh-info{font-family:var(--font-mono); font-size:10.5px; color:var(--text-dim); text-align:right;}
+
+  .summary-row{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:20px;}
+  .summary-box{background:var(--panel); border:1px solid var(--border); border-radius:2px; padding:14px; text-align:center;}
+  .summary-box .n{font-family:var(--font-mono); font-size:22px; color:var(--cyan);}
+  .summary-box.alert .n{color:var(--red);}
+  .summary-box .l{font-family:var(--font-mono); font-size:9.5px; color:var(--text-dim); margin-top:4px; letter-spacing:1px;}
+
+  .teams-grid{display:grid; grid-template-columns:1fr; gap:12px;}
+  @media(min-width:720px){.teams-grid{grid-template-columns:1fr 1fr;}}
+  .empty-note{font-family:var(--font-mono); font-size:12.5px; color:var(--text-dim); text-align:center; padding:40px 20px; border:1px dashed var(--border); border-radius:2px;}
+
+  .team-card{background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--border-bright); border-radius:2px; padding:16px; position:relative;}
+  .team-card.alert{border-left-color:var(--red); box-shadow:0 0 0 1px rgba(255,79,94,.15) inset;}
+  .team-card.done{border-left-color:var(--green);}
+  .team-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;}
+  .team-name{font-family:var(--font-display); font-size:15px; color:var(--text); letter-spacing:.5px;}
+  .team-alert-badge{font-family:var(--font-mono); font-size:9.5px; color:var(--red); border:1px solid var(--red); border-radius:2px; padding:2px 6px; letter-spacing:.5px;}
+  .team-time{font-family:var(--font-mono); font-size:11px; color:var(--text-dim);}
+  .team-members{font-family:var(--font-mono); font-size:10.5px; color:var(--text-dim); margin-bottom:10px;}
+
+  .team-nodes{display:flex; align-items:center; gap:1px; margin-bottom:10px; overflow-x:auto;}
+  .tnode{display:flex; flex-direction:column; align-items:center; gap:3px; min-width:34px; flex-shrink:0;}
+  .tnode .d{width:11px; height:11px; border-radius:2px; border:1px solid var(--border-bright); background:var(--panel-2); transform:rotate(45deg);}
+  .tnode.done .d{background:var(--cyan); border-color:var(--cyan); box-shadow:0 0 5px var(--cyan);}
+  .tnode.current .d{background:var(--amber); border-color:var(--amber); box-shadow:0 0 6px var(--amber);}
+  .tnode .l{font-family:var(--font-mono); font-size:7px; color:var(--text-dim); white-space:nowrap;}
+  .tline{flex:1; height:1px; background:var(--border-bright); min-width:6px; margin-top:-11px;}
+  .tline.done{background:var(--cyan);}
+
+  .team-stat-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
+  .team-stat{font-family:var(--font-mono); font-size:10.5px; padding:4px 8px; border-radius:2px; background:var(--panel-2); border:1px solid var(--border); color:var(--text-dim);}
+  .team-stat.warn{color:var(--amber); border-color:rgba(255,180,84,.4);}
+  .team-stat.danger{color:var(--red); border-color:rgba(255,79,94,.4);}
+  .progress-pct{font-family:var(--font-mono); font-size:11px; color:var(--cyan);}
+
+  .footnote{font-family:var(--font-mono); font-size:10.5px; color:#425663; text-align:center; margin-top:26px; line-height:1.7;}
+
+  /* ---------- Settings Modal ---------- */
+  .modal-overlay{position:fixed; inset:0; background:rgba(2,5,8,0.82); display:none; align-items:center; justify-content:center; z-index:100; padding:20px;}
+  .modal-overlay.show{display:flex;}
+  .modal-box{background:var(--panel); border:1px solid var(--border-bright); border-radius:2px; padding:24px; max-width:440px; width:100%; position:relative; max-height:90vh; overflow-y:auto;}
+  .modal-close{position:absolute; top:10px; right:12px; background:none; border:none; color:var(--text-dim); font-size:20px;}
+  .modal-close:hover{color:var(--text);}
+  .modal-section{margin-bottom:22px; padding-bottom:20px; border-bottom:1px solid var(--border);}
+  .modal-section:last-child{border-bottom:none; margin-bottom:0; padding-bottom:0;}
+  .eyebrow{font-family:var(--font-mono); font-size:11px; color:var(--cyan); letter-spacing:2px; text-transform:uppercase; margin-bottom:10px;}
+</style>
+</head>
+<body>
+
+<div class="scanline"></div>
+<div class="vignette"></div>
+
+<!-- LOGIN GATE -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">K-STATION · RESTRICTED ACCESS</div>
+    <div class="login-title">MISSION CONTROL</div>
+    <div class="login-mode-row">
+      <span class="mode-badge" id="modeBadge">-</span>
+    </div>
+
+    <button class="toggle-url-btn" id="toggleUrlBtn" type="button">⚙ 백엔드 연결 설정 (Web App URL)</button>
+    <div class="url-box" id="urlBox">
+      <div class="field">
+        <label>Apps Script 웹 앱 URL</label>
+        <input type="text" id="webAppUrlInput" placeholder="https://script.google.com/macros/s/xxxxx/exec">
+        <div class="hint">비워두면 데모 모드(가상 데이터)로 동작합니다. 실제 배포 시 backend-setup-guide.md의 3단계에서 받은 URL을 입력하세요.</div>
+      </div>
+      <button class="btn secondary" id="saveUrlBtn" type="button" style="margin-bottom:16px;">URL 저장</button>
+    </div>
+
+    <div class="field">
+      <label>관제센터 접속 비밀번호</label>
+      <input type="password" id="pwInput" placeholder="••••••••" autocomplete="off">
+    </div>
+    <div class="msg err" id="loginErr"></div>
+    <button class="btn" id="loginBtn">접속</button>
+    <div class="demo-note">
+      ※ 데모 모드의 비밀번호(<span style="color:var(--amber);">CONTROL2026</span>)는 이 페이지 안에 하드코딩된 프로토타입 전용 값입니다.<br>
+      실제 배포(백엔드 연결) 시 비밀번호는 이 페이지 어디에도 저장되지 않고 Google Apps Script(PropertiesService)에만 저장되어
+      서버 측에서만 검증됩니다.
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboardScreen">
+  <div class="dash-header">
+    <div>
+      <div class="dash-title">K-STATION · MISSION CONTROL <span class="mode-badge" id="modeBadgeDash">-</span></div>
+      <div class="dash-sub">탐사팀 실시간 진행 현황 모니터</div>
+    </div>
+    <div class="dash-actions">
+      <div class="refresh-info" id="refreshInfo">마지막 갱신 -</div>
+      <button class="btn secondary" id="settingsBtn">⚙ 설정</button>
+      <button class="btn secondary" id="refreshBtn">↻ 새로고침</button>
+      <button class="btn secondary" id="logoutBtn">로그아웃</button>
+    </div>
+  </div>
+
+  <div class="summary-row">
+    <div class="summary-box"><div class="n" id="sumTeams">-</div><div class="l">전체 탐사팀</div></div>
+    <div class="summary-box"><div class="n" id="sumDone">-</div><div class="l">귀환 신호 완료</div></div>
+    <div class="summary-box"><div class="n" id="sumAvg">-</div><div class="l">평균 진행률</div></div>
+    <div class="summary-box alert"><div class="n" id="sumAlert">-</div><div class="l">개입 필요 팀</div></div>
+  </div>
+
+  <div class="teams-grid" id="teamsGrid"></div>
+  <div class="empty-note" id="emptyNote" style="display:none;">아직 등록된 탐사팀이 없습니다.</div>
+
+  <div class="footnote" id="dashFootnote"></div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal-box">
+    <button class="modal-close" id="settingsClose">✕</button>
+
+    <div class="modal-section">
+      <div class="eyebrow">백엔드 연결 설정</div>
+      <div class="field">
+        <label>Apps Script 웹 앱 URL</label>
+        <input type="text" id="settingsUrlInput" placeholder="https://script.google.com/macros/s/xxxxx/exec">
+        <div class="hint">URL을 바꾸면 다시 로그인해야 합니다.</div>
+      </div>
+      <button class="btn secondary" id="settingsSaveUrlBtn">저장하고 다시 로그인</button>
+    </div>
+
+    <div class="modal-section">
+      <div class="eyebrow">비밀번호 변경</div>
+      <div id="pwChangeArea">
+        <div class="field">
+          <label>현재 비밀번호</label>
+          <input type="password" id="curPwInput">
+        </div>
+        <div class="field">
+          <label>새 비밀번호 (6자 이상)</label>
+          <input type="password" id="newPwInput">
+        </div>
+        <div class="field">
+          <label>새 비밀번호 확인</label>
+          <input type="password" id="newPwInput2">
+        </div>
+        <div class="msg err" id="pwChangeMsg"></div>
+        <button class="btn amber-btn" id="changePwBtn" style="background:rgba(255,180,84,.08); border-color:var(--amber); color:var(--amber);">비밀번호 변경</button>
+      </div>
+      <div id="pwChangeDemoNote" style="display:none;" class="msg" style="color:var(--text-dim);">데모 모드에서는 비밀번호 변경을 지원하지 않습니다. 백엔드 연결 후 이용해주세요.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const MAP_ORDER = [
+    {key:'INTRO', label:'INTRO'},
+    {key:'PROLOGUE', label:'PROLOGUE'},
+    {key:'SECTOR1', label:'SEC.1'},
+    {key:'SECTOR2A', label:'SEC.2A'},
+    {key:'SECTOR2B', label:'SEC.2B'},
+    {key:'SECTOR3', label:'SEC.3'},
+    {key:'FINAL', label:'SIGNAL'}
+  ];
+  const SECTOR_KEYS = ['SECTOR1','SECTOR2A','SECTOR2B','SECTOR3'];
+  const DEMO_PASSWORD = 'CONTROL2026'; // 데모 모드 전용 (URL 미설정 시에만 사용)
+  const URL_STORAGE_KEY = 'kstation_dashboard_url';
+
+  let WEB_APP_URL = localStorage.getItem(URL_STORAGE_KEY) || '';
+  let liveMode = !!WEB_APP_URL;
+  let sessionToken = null;
+  let teams = [];
+
+  function isLive(){ return liveMode; }
+
+  /* ============ API HELPERS ============ */
+  async function apiPost(action, payload){
+    const res = await fetch(WEB_APP_URL, {
+      method: 'POST',
+      body: JSON.stringify(Object.assign({action:action}, payload))
+    });
+    return res.json();
+  }
+  async function apiGet(params){
+    const qs = new URLSearchParams(params).toString();
+    const res = await fetch(WEB_APP_URL + '?' + qs);
+    return res.json();
+  }
+
+  /* ============ MOCK DATA (데모 모드 전용) ============ */
+  function randInt(a,b){ return Math.floor(a + Math.random()*(b-a+1)); }
+  function makeMockTeam(name, members, stageIndex, startedMinAgo){
+    const wrongAttempts = {};
+    const hintLocked = {};
+    SECTOR_KEYS.forEach((k, i) => {
+      const passedThis = stageIndex > (i+2);
+      wrongAttempts[k] = passedThis ? randInt(0,2) : (stageIndex === i+2 ? randInt(0,4) : 0);
+      hintLocked[k] = (stageIndex === i+2) && Math.random() < 0.18;
+    });
+    return {
+      teamName: name,
+      members: members,
+      stageIndex: stageIndex,
+      wrongAttempts: wrongAttempts,
+      hintLocked: hintLocked,
+      startTime: Date.now() - startedMinAgo*60000,
+      finishTime: stageIndex >= 7 ? Date.now() - randInt(0,5)*60000 : null
+    };
+  }
+  function loadMockTeams(){
+    teams = [
+      makeMockTeam('1조 · 볼타팀', '김서연, 이도윤', 7, 42),
+      makeMockTeam('2조', '박지후, 최민서', 5, 38),
+      makeMockTeam('3조', '정하은, 강시우', 4, 35),
+      makeMockTeam('4조', '윤지아, 임태호', 3, 30),
+      makeMockTeam('5조', '한소율', 2, 22),
+      makeMockTeam('6조', '오은우, 서지민, 배유나', 6, 40)
+    ];
+  }
+  function tickMockUpdate(){
+    teams.forEach(t => {
+      if(t.finishTime) return;
+      const r = Math.random();
+      if(r < 0.18 && t.stageIndex < 7){
+        t.stageIndex++;
+        if(t.stageIndex >= 7) t.finishTime = Date.now();
+      } else if(r < 0.35){
+        const idx = t.stageIndex - 2;
+        const key = SECTOR_KEYS[idx];
+        if(key) t.wrongAttempts[key] = (t.wrongAttempts[key]||0) + 1;
+        if(key && t.wrongAttempts[key] >= 3 && Math.random() < 0.3) t.hintLocked[key] = true;
+      }
+    });
+  }
+
+  /* ============ LIVE DATA (Google Sheets 연동) ============ */
+  function stageKeyToIndex(stageKey){
+    const i = MAP_ORDER.findIndex(m => m.key === stageKey);
+    return i === -1 ? 0 : i;
+  }
+  async function loadLiveTeams(){
+    const data = await apiGet({ action:'getTeams', sessionToken: sessionToken });
+    if(!data.ok) throw new Error(data.error || '데이터를 불러오지 못했습니다');
+    teams = data.teams.map(t => ({
+      teamName: t.teamName,
+      members: t.members,
+      stageIndex: stageKeyToIndex(t.currentStage),
+      wrongAttempts: t.wrongAttempts,
+      hintLocked: t.hintLocked,
+      startTime: t.startTime,
+      finishTime: t.finishTime
+    }));
+  }
+
+  /* ============ RENDER ============ */
+  function fmtDuration(ms){
+    const s = Math.max(0, Math.floor(ms/1000));
+    const m = Math.floor(s/60);
+    const ss = (s%60).toString().padStart(2,'0');
+    return m.toString().padStart(2,'0') + ':' + ss;
+  }
+  function isStruggling(t){
+    const totalWrong = Object.values(t.wrongAttempts).reduce((a,b)=>a+(Number(b)||0),0);
+    const anyLocked = Object.values(t.hintLocked).some(v=>v);
+    return !t.finishTime && (totalWrong >= 3 || anyLocked);
+  }
+
+  function renderDashboard(){
+    document.getElementById('refreshInfo').textContent = '마지막 갱신 ' + new Date().toLocaleTimeString('ko-KR', {hour12:false});
+
+    const total = teams.length;
+    const done = teams.filter(t=>t.finishTime).length;
+    const avgPct = total ? Math.round(teams.reduce((a,t)=>a + (t.stageIndex/7*100), 0) / total) : 0;
+    const alertCount = teams.filter(isStruggling).length;
+
+    document.getElementById('sumTeams').textContent = total;
+    document.getElementById('sumDone').textContent = done;
+    document.getElementById('sumAvg').textContent = avgPct + '%';
+    document.getElementById('sumAlert').textContent = alertCount;
+
+    const grid = document.getElementById('teamsGrid');
+    const emptyNote = document.getElementById('emptyNote');
+    grid.innerHTML = '';
+
+    if(total === 0){
+      emptyNote.style.display = 'block';
+      return;
+    }
+    emptyNote.style.display = 'none';
+
+    const sorted = teams.slice().sort((a,b) => {
+      const sa = isStruggling(a) ? 0 : 1, sb = isStruggling(b) ? 0 : 1;
+      if(sa !== sb) return sa - sb;
+      return b.stageIndex - a.stageIndex;
+    });
+    sorted.forEach(t => grid.appendChild(renderTeamCard(t)));
+  }
+
+  function renderTeamCard(t){
+    const card = document.createElement('div');
+    const struggling = isStruggling(t);
+    card.className = 'team-card' + (struggling ? ' alert' : '') + (t.finishTime ? ' done' : '');
+
+    const top = document.createElement('div');
+    top.className = 'team-top';
+    const elapsed = t.finishTime ? (t.finishTime - t.startTime) : (Date.now() - (t.startTime || Date.now()));
+    top.innerHTML = '<div class="team-name">'+escapeHtml(t.teamName)+'</div>' +
+      (struggling ? '<div class="team-alert-badge">개입 필요</div>' : '<div class="team-time">'+fmtDuration(elapsed)+'</div>');
+    card.appendChild(top);
+
+    const members = document.createElement('div');
+    members.className = 'team-members';
+    members.textContent = '조원: ' + (t.members && String(t.members).trim() ? t.members : '미입력');
+    card.appendChild(members);
+
+    const nodes = document.createElement('div');
+    nodes.className = 'team-nodes';
+    MAP_ORDER.forEach((m, i) => {
+      const n = document.createElement('div');
+      n.className = 'tnode' + (i < t.stageIndex ? ' done' : (i === t.stageIndex ? ' current' : ''));
+      n.innerHTML = '<div class="d"></div><div class="l">'+m.label+'</div>';
+      nodes.appendChild(n);
+      if(i < MAP_ORDER.length-1){
+        const line = document.createElement('div');
+        line.className = 'tline' + (i < t.stageIndex ? ' done' : '');
+        nodes.appendChild(line);
+      }
+    });
+    card.appendChild(nodes);
+
+    const statRow = document.createElement('div');
+    statRow.className = 'team-stat-row';
+    const pctSpan = document.createElement('span');
+    pctSpan.className = 'progress-pct';
+    pctSpan.textContent = Math.round(t.stageIndex/7*100) + '% 진행';
+    statRow.appendChild(pctSpan);
+
+    SECTOR_KEYS.forEach(k => {
+      const wrong = Number(t.wrongAttempts[k]) || 0;
+      const locked = !!t.hintLocked[k];
+      if(wrong > 0 || locked){
+        const chip = document.createElement('span');
+        chip.className = 'team-stat' + (locked ? ' danger' : (wrong>=2 ? ' warn' : ''));
+        chip.textContent = k.replace('SECTOR','SEC.') + (locked ? ' · 힌트 잠김' : ' · 오답 '+wrong);
+        statRow.appendChild(chip);
+      }
+    });
+    card.appendChild(statRow);
+    return card;
+  }
+  function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  /* ============ MODE UI ============ */
+  function refreshModeBadges(){
+    const label = liveMode ? 'LIVE MODE' : 'DEMO MODE';
+    const cls = liveMode ? 'live' : 'demo';
+    [document.getElementById('modeBadge'), document.getElementById('modeBadgeDash')].forEach(el=>{
+      if(!el) return;
+      el.textContent = label;
+      el.className = 'mode-badge ' + cls;
+    });
+    document.getElementById('dashFootnote').innerHTML = liveMode
+      ? '※ Google Sheets에 연동된 실제 데이터입니다. 8초마다 자동으로 다시 조회합니다.'
+      : '※ 표시되는 데이터는 프로토타입 데모용 가상 데이터이며, 8초마다 임의로 갱신됩니다.<br>실제 배포 시에는 설정에서 Apps Script 웹 앱 URL을 입력하면 Google Sheets 데이터가 표시됩니다.';
+  }
+
+  /* ============ LOGIN ============ */
+  async function attemptLogin(){
+    const pw = document.getElementById('pwInput').value;
+    const err = document.getElementById('loginErr');
+    err.textContent = '';
+
+    if(liveMode){
+      try{
+        const data = await apiPost('login', { password: pw });
+        if(data.ok){
+          sessionToken = data.sessionToken;
+          await enterDashboard();
+        } else {
+          err.textContent = data.error || '비밀번호가 올바르지 않습니다.';
+        }
+      }catch(e){
+        err.textContent = '백엔드에 연결할 수 없습니다. Web App URL을 확인하세요.';
+      }
+    } else {
+      if(pw === DEMO_PASSWORD){
+        loadMockTeams();
+        await enterDashboard();
+      } else {
+        err.textContent = '비밀번호가 올바르지 않습니다. (데모 모드)';
+      }
+    }
+  }
+
+  async function enterDashboard(){
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('dashboardScreen').style.display = 'block';
+    refreshModeBadges();
+    await refreshTeams();
+    startPolling();
+  }
+
+  async function refreshTeams(){
+    try{
+      if(liveMode) await loadLiveTeams();
+      else tickMockUpdate();
+      renderDashboard();
+    }catch(e){
+      document.getElementById('emptyNote').style.display = 'block';
+      document.getElementById('emptyNote').textContent = '데이터를 불러오지 못했습니다: ' + e.message;
+    }
+  }
+
+  document.getElementById('loginBtn').addEventListener('click', attemptLogin);
+  document.getElementById('pwInput').addEventListener('keydown', e => { if(e.key==='Enter') attemptLogin(); });
+
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    stopPolling();
+    sessionToken = null;
+    document.getElementById('pwInput').value = '';
+    document.getElementById('dashboardScreen').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+  });
+  document.getElementById('refreshBtn').addEventListener('click', refreshTeams);
+
+  /* ============ URL CONFIG (로그인 화면) ============ */
+  document.getElementById('toggleUrlBtn').addEventListener('click', () => {
+    document.getElementById('urlBox').classList.toggle('show');
+  });
+  document.getElementById('webAppUrlInput').value = WEB_APP_URL;
+  document.getElementById('saveUrlBtn').addEventListener('click', () => {
+    const val = document.getElementById('webAppUrlInput').value.trim();
+    WEB_APP_URL = val;
+    liveMode = !!WEB_APP_URL;
+    localStorage.setItem(URL_STORAGE_KEY, WEB_APP_URL);
+    refreshModeBadges();
+    document.getElementById('loginErr').className = 'msg ok';
+    document.getElementById('loginErr').textContent = liveMode ? 'URL이 저장되었습니다. 접속 비밀번호를 입력하세요.' : 'URL이 비워져 데모 모드로 전환되었습니다.';
+  });
+
+  /* ============ SETTINGS MODAL (대시보드 내부) ============ */
+  const settingsModal = document.getElementById('settingsModal');
+  document.getElementById('settingsBtn').addEventListener('click', () => {
+    document.getElementById('settingsUrlInput').value = WEB_APP_URL;
+    document.getElementById('pwChangeArea').style.display = liveMode ? 'block' : 'none';
+    document.getElementById('pwChangeDemoNote').style.display = liveMode ? 'none' : 'block';
+    document.getElementById('pwChangeMsg').textContent = '';
+    settingsModal.classList.add('show');
+  });
+  document.getElementById('settingsClose').addEventListener('click', () => settingsModal.classList.remove('show'));
+  settingsModal.addEventListener('click', (e) => { if(e.target === settingsModal) settingsModal.classList.remove('show'); });
+
+  document.getElementById('settingsSaveUrlBtn').addEventListener('click', () => {
+    const val = document.getElementById('settingsUrlInput').value.trim();
+    WEB_APP_URL = val;
+    liveMode = !!WEB_APP_URL;
+    localStorage.setItem(URL_STORAGE_KEY, WEB_APP_URL);
+    stopPolling();
+    settingsModal.classList.remove('show');
+    sessionToken = null;
+    document.getElementById('dashboardScreen').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('webAppUrlInput').value = WEB_APP_URL;
+    document.getElementById('urlBox').classList.add('show');
+    refreshModeBadges();
+    document.getElementById('loginErr').className = 'msg ok';
+    document.getElementById('loginErr').textContent = 'URL이 변경되었습니다. 다시 로그인해주세요.';
+  });
+
+  document.getElementById('changePwBtn').addEventListener('click', async () => {
+    const cur = document.getElementById('curPwInput').value;
+    const n1 = document.getElementById('newPwInput').value;
+    const n2 = document.getElementById('newPwInput2').value;
+    const msg = document.getElementById('pwChangeMsg');
+    msg.className = 'msg err';
+
+    if(!liveMode){ msg.textContent = '데모 모드에서는 비밀번호 변경을 지원하지 않습니다.'; return; }
+    if(n1.length < 6){ msg.textContent = '새 비밀번호는 6자 이상이어야 합니다.'; return; }
+    if(n1 !== n2){ msg.textContent = '새 비밀번호가 서로 일치하지 않습니다.'; return; }
+
+    try{
+      const data = await apiPost('changePassword', { sessionToken: sessionToken, currentPassword: cur, newPassword: n1 });
+      if(data.ok){
+        msg.className = 'msg ok';
+        msg.textContent = '비밀번호가 변경되었습니다. 다음 로그인부터 새 비밀번호를 사용하세요.';
+        document.getElementById('curPwInput').value = '';
+        document.getElementById('newPwInput').value = '';
+        document.getElementById('newPwInput2').value = '';
+      } else {
+        msg.textContent = data.error || '비밀번호 변경에 실패했습니다.';
+      }
+    }catch(e){
+      msg.textContent = '백엔드에 연결할 수 없습니다.';
+    }
+  });
+
+  /* ============ POLLING ============ */
+  let pollHandle = null;
+  function startPolling(){
+    stopPolling();
+    pollHandle = setInterval(refreshTeams, 8000);
+  }
+  function stopPolling(){ if(pollHandle) clearInterval(pollHandle); pollHandle = null; }
+
+  /* ============ INIT ============ */
+  refreshModeBadges();
+  if(liveMode){ document.getElementById('urlBox').classList.add('show'); }
+
+})();
+</script>
+
+</body>
+</html>

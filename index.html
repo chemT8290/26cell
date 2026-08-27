@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>K-STATION · 복구 프로토콜</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #060a10;
+    --bg-grid: #0a1119;
+    --panel: #0e1620;
+    --panel-2: #101c28;
+    --border: #1c2f3d;
+    --border-bright: #2c4b5e;
+    --cyan: #4ee3c8;
+    --cyan-dim: #2a6e63;
+    --amber: #ffb454;
+    --red: #ff4f5e;
+    --green: #35e58a;
+    --text: #e7f3f5;
+    --text-dim: #7d94a0;
+    --font-display: 'Orbitron', 'Share Tech Mono', monospace;
+    --font-body: 'Rajdhani', 'Segoe UI', sans-serif;
+    --font-mono: 'Share Tech Mono', monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);}
+  body{
+    font-family:var(--font-body);
+    color:var(--text);
+    min-height:100vh;
+    position:relative;
+    overflow-x:hidden;
+    background:
+      radial-gradient(circle at 15% 10%, rgba(78,227,200,0.06), transparent 40%),
+      radial-gradient(circle at 85% 90%, rgba(255,180,84,0.05), transparent 40%),
+      repeating-linear-gradient(0deg, var(--bg-grid) 0px, var(--bg-grid) 1px, var(--bg) 1px, var(--bg) 32px),
+      repeating-linear-gradient(90deg, var(--bg-grid) 0px, var(--bg-grid) 1px, var(--bg) 1px, var(--bg) 32px),
+      var(--bg);
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important;}
+  }
+  .scanline{
+    position:fixed; inset:0; pointer-events:none; z-index:200; mix-blend-mode:overlay; opacity:.35;
+    background:repeating-linear-gradient(180deg, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 1px, transparent 1px, transparent 3px);
+  }
+  .vignette{position:fixed; inset:0; pointer-events:none; z-index:199;
+    box-shadow: inset 0 0 160px rgba(0,0,0,0.75);
+  }
+  button{font-family:inherit;cursor:pointer;}
+  input{font-family:inherit;}
+  :focus-visible{outline:2px solid var(--cyan); outline-offset:2px;}
+
+  /* ---------- Station Map Header ---------- */
+  #stationMap{
+    position:sticky; top:0; z-index:50;
+    background:linear-gradient(180deg, rgba(6,10,16,0.97), rgba(6,10,16,0.88));
+    border-bottom:1px solid var(--border);
+    padding:10px 14px 12px;
+    display:none;
+  }
+  #stationMap.show{display:block;}
+  .map-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+  .team-tag{font-family:var(--font-mono); font-size:12px; color:var(--cyan); letter-spacing:1px;}
+  .team-tag b{color:var(--text);}
+  .station-clock{font-family:var(--font-mono); font-size:11px; color:var(--text-dim);}
+  .map-nodes{display:flex; align-items:center; gap:2px; overflow-x:auto; padding-bottom:2px;}
+  .node{
+    display:flex; flex-direction:column; align-items:center; gap:4px; min-width:44px; flex-shrink:0;
+  }
+  .node .dot{
+    width:14px; height:14px; border-radius:3px; border:1px solid var(--border-bright);
+    background:var(--panel); transform:rotate(45deg); transition:all .3s;
+  }
+  .node.done .dot{background:var(--cyan); border-color:var(--cyan); box-shadow:0 0 8px var(--cyan);}
+  .node.current .dot{background:var(--amber); border-color:var(--amber); box-shadow:0 0 10px var(--amber); animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%,100%{transform:rotate(45deg) scale(1);}50%{transform:rotate(45deg) scale(1.35);}}
+  .node .label{font-family:var(--font-mono); font-size:8.5px; color:var(--text-dim); letter-spacing:.5px; white-space:nowrap;}
+  .node.done .label{color:var(--cyan);}
+  .node.current .label{color:var(--amber);}
+  .node.viewing .dot{box-shadow:0 0 0 3px rgba(78,227,200,0.28);}
+  .node{cursor:default;}
+  .node.clickable{cursor:pointer;}
+  .node.clickable:hover .dot{filter:brightness(1.3);}
+  .node-line{flex:1; height:1px; background:var(--border-bright); min-width:10px; margin-top:-14px;}
+  .node-line.done{background:var(--cyan);}
+
+  /* ---------- Layout ---------- */
+  #app{max-width:640px; margin:0 auto; padding:18px 16px 60px; position:relative; z-index:1;}
+  .screen{display:none;}
+  .screen.active{display:block; animation:fadeUp .5s ease;}
+  @keyframes fadeUp{from{opacity:0; transform:translateY(14px);}to{opacity:1; transform:translateY(0);}}
+
+  .hud-frame{
+    position:relative; background:var(--panel); border:1px solid var(--border); border-radius:2px;
+    padding:20px; margin-bottom:16px;
+  }
+  .hud-frame::before, .hud-frame::after{
+    content:''; position:absolute; width:14px; height:14px; border:2px solid var(--cyan); opacity:.8;
+  }
+  .hud-frame::before{top:-1px; left:-1px; border-right:none; border-bottom:none;}
+  .hud-frame::after{bottom:-1px; right:-1px; border-left:none; border-top:none;}
+
+  .eyebrow{font-family:var(--font-mono); font-size:11px; color:var(--cyan); letter-spacing:2px; text-transform:uppercase; margin-bottom:6px;}
+  h1,h2,h3{font-family:var(--font-display); font-weight:700; margin:0 0 10px; line-height:1.3;}
+  h1{font-size:22px; letter-spacing:.5px;}
+  h2{font-size:18px; color:var(--text);}
+  p{line-height:1.6; color:var(--text-dim); font-size:15px; margin:0 0 12px;}
+  strong{color:var(--text);}
+
+  /* ---------- Buttons / Inputs ---------- */
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    padding:13px 22px; border-radius:2px; border:1px solid var(--cyan);
+    background:rgba(78,227,200,0.08); color:var(--cyan); font-family:var(--font-display);
+    font-size:13px; letter-spacing:1.5px; text-transform:uppercase; transition:all .2s; width:100%;
+  }
+  .btn:hover:not(:disabled){background:rgba(78,227,200,0.18); box-shadow:0 0 16px rgba(78,227,200,.25);}
+  .btn:disabled{opacity:.35; cursor:not-allowed;}
+  .btn.secondary{border-color:var(--border-bright); color:var(--text-dim); background:transparent;}
+  .btn.secondary:hover:not(:disabled){border-color:var(--text-dim); color:var(--text);}
+  .btn.amber{border-color:var(--amber); color:var(--amber); background:rgba(255,180,84,0.08);}
+  .btn.amber:hover:not(:disabled){background:rgba(255,180,84,.18); box-shadow:0 0 16px rgba(255,180,84,.25);}
+  .btn-row{display:flex; gap:10px; margin-top:14px;}
+
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-bottom:6px; letter-spacing:1px;}
+  .field input[type=text]{
+    width:100%; padding:12px 14px; background:var(--panel-2); border:1px solid var(--border);
+    color:var(--text); border-radius:2px; font-size:16px; letter-spacing:.5px;
+  }
+  .field input[type=text]:focus{border-color:var(--cyan);}
+  .member-row{display:flex; gap:8px; margin-bottom:8px;}
+  .member-row input{flex:1;}
+  .icon-btn{
+    width:40px; flex-shrink:0; background:var(--panel-2); border:1px solid var(--border); color:var(--text-dim);
+    border-radius:2px; font-size:18px; line-height:1;
+  }
+  .icon-btn:hover{color:var(--red); border-color:var(--red);}
+
+  /* ---------- Intro ---------- */
+  .intro-wrap{min-height:80vh; display:flex; flex-direction:column; justify-content:center;}
+  .intro-logo{font-family:var(--font-display); font-size:13px; color:var(--text-dim); letter-spacing:4px; text-align:center; margin-bottom:6px;}
+  .intro-title{font-family:var(--font-display); font-size:28px; text-align:center; color:var(--cyan); letter-spacing:2px; margin-bottom:26px; text-shadow:0 0 20px rgba(78,227,200,.4);}
+  #typeText{font-family:var(--font-mono); font-size:15px; line-height:1.9; color:var(--text); min-height:150px; white-space:pre-wrap;}
+  #typeText .cursor{display:inline-block; width:8px; height:16px; background:var(--cyan); margin-left:2px; animation:blink 1s step-end infinite; vertical-align:middle;}
+  @keyframes blink{50%{opacity:0;}}
+  .intro-form{margin-top:20px; opacity:0; transition:opacity .6s;}
+  .intro-form.show{opacity:1;}
+
+  /* ---------- Mission Brief ---------- */
+  .sector-tag{font-family:var(--font-mono); font-size:12px; color:var(--amber); letter-spacing:2px;}
+  .prep-list{display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 14px;}
+  .prep-chip{font-family:var(--font-mono); font-size:12.5px; background:var(--panel-2); border:1px solid var(--border); padding:6px 10px; border-radius:2px; color:var(--text);}
+  .success-box{background:rgba(53,229,138,.07); border:1px solid rgba(53,229,138,.35); border-radius:2px; padding:10px 12px; font-size:13.5px; color:var(--green); margin-bottom:14px;}
+  .concept-box{border-left:2px solid var(--cyan-dim); padding:8px 12px; font-size:13px; color:var(--text-dim); font-style:italic; margin-bottom:6px;}
+
+  .approval-note{font-family:var(--font-mono); font-size:12.5px; color:var(--amber); text-align:center; padding:10px; border:1px dashed var(--border-bright); border-radius:2px; margin:14px 0;}
+
+  .review-banner{
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    background:rgba(78,227,200,0.08); border:1px solid var(--cyan-dim); border-radius:2px;
+    padding:10px 14px; margin-bottom:16px; font-family:var(--font-mono); font-size:12px; color:var(--cyan);
+  }
+  .review-banner .btn.secondary{width:auto; padding:8px 14px; font-size:11px;}
+
+  .code-entry{margin-top:6px;}
+  .code-entry input{
+    width:100%; padding:16px; background:var(--panel-2); border:1px solid var(--border);
+    color:var(--cyan); font-family:var(--font-mono); font-size:20px; text-align:center; letter-spacing:4px;
+    border-radius:2px; text-transform:uppercase;
+  }
+  .code-entry input:focus{border-color:var(--cyan);}
+  .code-entry.shake input{animation:shake .4s;}
+  @keyframes shake{20%,60%{transform:translateX(-8px);}40%,80%{transform:translateX(8px);}}
+  .feedback{font-family:var(--font-mono); font-size:12.5px; text-align:center; margin-top:8px; min-height:18px;}
+  .feedback.err{color:var(--red);}
+  .feedback.ok{color:var(--green);}
+  .lock-bar{height:4px; background:var(--panel-2); border-radius:2px; overflow:hidden; margin-top:10px; display:none;}
+  .lock-bar.show{display:block;}
+  .lock-bar > div{height:100%; background:var(--red); width:100%; transition:width 1s linear;}
+  .lock-label{font-family:var(--font-mono); font-size:11px; color:var(--red); text-align:center; margin-top:4px; display:none;}
+  .lock-label.show{display:block;}
+
+  .sector-footer{display:flex; justify-content:center; margin-top:16px;}
+  .hint-link{background:none; border:none; color:var(--text-dim); font-family:var(--font-mono); font-size:12px; text-decoration:underline; letter-spacing:.5px;}
+  .hint-link:hover{color:var(--amber);}
+
+  /* ---------- Prologue Cards ---------- */
+  .card-progress{display:flex; justify-content:center; gap:6px; margin-bottom:14px;}
+  .card-progress span{width:7px; height:7px; border-radius:50%; background:var(--border-bright); transition:all .3s;}
+  .card-progress span.active{background:var(--cyan); box-shadow:0 0 6px var(--cyan); width:18px; border-radius:4px;}
+  .card-progress span.past{background:var(--cyan-dim);}
+  .card-track{overflow:hidden;}
+  .card-slide{min-height:340px;}
+  .fragment-box{
+    margin-top:14px; padding:10px 12px; border:1px dashed var(--cyan-dim); border-radius:2px;
+    font-family:var(--font-mono); font-size:13px; color:var(--cyan); text-align:center; letter-spacing:2px;
+  }
+  .choice-row{display:flex; gap:10px; margin-top:14px;}
+  .choice-btn{flex:1; padding:14px; background:var(--panel-2); border:1px solid var(--border); border-radius:2px; color:var(--text); font-family:var(--font-body); font-weight:600; font-size:15px;}
+  .choice-btn:hover{border-color:var(--cyan);}
+  .choice-btn.correct{border-color:var(--green); color:var(--green); background:rgba(53,229,138,.08);}
+  .choice-btn.wrong{border-color:var(--red); color:var(--red); animation:shake .4s;}
+
+  .cipher-box{font-family:var(--font-mono); font-size:22px; letter-spacing:4px; text-align:center; color:var(--amber); background:var(--panel-2); border:1px solid var(--border); border-radius:2px; padding:16px; margin:14px 0;}
+  .cipher-key{font-family:var(--font-mono); font-size:11px; color:var(--text-dim); text-align:center; margin-bottom:10px; line-height:1.8; word-spacing:4px;}
+
+  .match-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;}
+  .match-item{padding:11px 8px; background:var(--panel-2); border:1px solid var(--border); border-radius:2px; font-size:13px; text-align:center; color:var(--text); min-height:44px; display:flex; align-items:center; justify-content:center;}
+  .match-item.selected{border-color:var(--amber); color:var(--amber);}
+  .match-item.matched{border-color:var(--green); color:var(--green); background:rgba(53,229,138,.08); opacity:.7;}
+  .match-item.wrongflash{animation:shake .4s; border-color:var(--red);}
+
+  .combo-frags{display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:14px 0;}
+  .combo-frags span{font-family:var(--font-mono); font-size:13px; color:var(--cyan); border:1px solid var(--cyan-dim); padding:6px 10px; border-radius:2px;}
+
+  /* ---------- Modal (Hint Quiz) ---------- */
+  .modal-overlay{position:fixed; inset:0; background:rgba(2,5,8,0.82); display:none; align-items:center; justify-content:center; z-index:100; padding:20px;}
+  .modal-overlay.show{display:flex;}
+  .modal-box{background:var(--panel); border:1px solid var(--border-bright); border-radius:2px; padding:22px; max-width:440px; width:100%; position:relative;}
+  .modal-close{position:absolute; top:10px; right:12px; background:none; border:none; color:var(--text-dim); font-size:20px;}
+  .modal-close:hover{color:var(--text);}
+  .quiz-q{font-size:15px; margin-bottom:14px; color:var(--text);}
+  .hint-reveal{background:rgba(255,180,84,.08); border:1px solid rgba(255,180,84,.4); border-radius:2px; padding:12px; font-size:13.5px; color:var(--amber); margin-top:10px; line-height:1.6;}
+  .locked-msg{text-align:center; padding:20px 0; color:var(--text-dim); font-family:var(--font-mono); font-size:13px; line-height:1.8;}
+  .quiz-attempts{font-family:var(--font-mono); font-size:11px; color:var(--text-dim); text-align:right; margin-top:10px;}
+
+  /* ---------- Final Screen ---------- */
+  #confettiCanvas{position:fixed; inset:0; pointer-events:none; z-index:150;}
+  .final-wrap{text-align:center; padding:40px 0;}
+  .final-title{font-family:var(--font-display); font-size:32px; color:var(--cyan); letter-spacing:2px; text-shadow:0 0 24px rgba(78,227,200,.5); margin-bottom:6px;}
+  .final-sub{font-family:var(--font-mono); font-size:13px; color:var(--text-dim); margin-bottom:30px; letter-spacing:1px;}
+  .final-stats{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;}
+  .stat-box{background:var(--panel-2); border:1px solid var(--border); border-radius:2px; padding:14px;}
+  .stat-box .n{font-family:var(--font-mono); font-size:18px; color:var(--cyan);}
+  .stat-box .l{font-family:var(--font-mono); font-size:10px; color:var(--text-dim); margin-top:4px; letter-spacing:1px;}
+  .recap{text-align:left; margin-top:20px;}
+  .recap-item{display:flex; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); font-size:13.5px;}
+  .recap-item b{color:var(--cyan); font-family:var(--font-mono); font-size:11px; flex-shrink:0; width:76px;}
+
+  .footnote{font-family:var(--font-mono); font-size:10.5px; color:#425663; text-align:center; margin-top:26px; line-height:1.7;}
+</style>
+</head>
+<body>
+
+<div class="scanline"></div>
+<div class="vignette"></div>
+<canvas id="confettiCanvas"></canvas>
+
+<!-- Station Map Header -->
+<div id="stationMap">
+  <div class="map-top">
+    <div class="team-tag">TEAM <b id="mapTeamName">-</b></div>
+    <div class="station-clock" id="mapClock">00:00</div>
+  </div>
+  <div class="map-nodes" id="mapNodes"></div>
+</div>
+
+<div id="app">
+
+  <!-- 0. INTRO -->
+  <section class="screen active" id="screen-intro">
+    <div class="intro-wrap">
+      <div class="intro-logo">K-STATION EMERGENCY PROTOCOL</div>
+      <div class="intro-title">전력 복구 임무</div>
+      <div id="typeText"></div>
+      <div class="intro-form" id="introForm">
+        <div class="hud-frame">
+          <div class="eyebrow">탐사팀 등록</div>
+          <div class="field">
+            <label>탐사팀 이름</label>
+            <input type="text" id="teamNameInput" placeholder="예) 1조 · 볼타팀">
+          </div>
+          <div class="field">
+            <label>탐사팀 조원</label>
+            <div id="memberRows"></div>
+            <button class="btn secondary" id="addMemberBtn" type="button" style="margin-top:4px;">+ 조원 추가</button>
+          </div>
+          <button class="btn" id="startBtn" style="margin-top:16px;">탐사 시작</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 1. PROLOGUE -->
+  <section class="screen" id="screen-prologue">
+    <div class="review-banner" id="prologueReviewBanner" style="display:none;">
+      <span>🔁 복습 모드 · 이미 통과한 자료실입니다</span>
+      <button class="btn secondary" id="prologueBackBtn">현재 단계로 돌아가기</button>
+    </div>
+    <div class="eyebrow">PROLOGUE · 자료실</div>
+    <h1>장비 매뉴얼 해독</h1>
+    <p>전력 복구에 앞서, 노후화된 화학전지 장비 매뉴얼을 해독해야 한다. 카드를 넘기며 개념을 확인하고, 곳곳에 숨겨진 과제를 해결해 복구 코드 조각을 모으자.</p>
+
+    <div class="card-progress" id="cardProgress"></div>
+    <div class="hud-frame card-track">
+      <div class="card-slide" id="cardSlide"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn secondary" id="cardPrevBtn">← 이전</button>
+      <button class="btn" id="cardNextBtn">다음 →</button>
+    </div>
+  </section>
+
+  <!-- 2. SECTOR (generic template) -->
+  <section class="screen" id="screen-sector">
+    <div class="review-banner" id="sectorReviewBanner" style="display:none;">
+      <span>🔁 복습 모드 · 이미 통과한 구역입니다</span>
+      <button class="btn secondary" id="sectorBackBtn">현재 단계로 돌아가기</button>
+    </div>
+    <div class="eyebrow" id="sectorEyebrow">SECTOR</div>
+    <h1 id="sectorTitle">-</h1>
+
+    <div class="hud-frame">
+      <div class="sector-tag">준비물</div>
+      <div class="prep-list" id="sectorPrep"></div>
+
+      <div class="success-box" id="sectorSuccess"></div>
+      <div class="concept-box" id="sectorConcept"></div>
+    </div>
+
+    <div class="hud-frame">
+      <div class="approval-note" id="approvalNote">실험이 성공했다면 관제센터(선생님)를 호출해 승인받고 복구 코드를 받으세요</div>
+
+      <div class="code-entry" id="codeEntryWrap">
+        <input type="text" id="codeInput" placeholder="복구 코드 입력" maxlength="20">
+      </div>
+      <div class="feedback" id="codeFeedback"></div>
+      <div class="lock-bar" id="lockBar"><div id="lockBarInner"></div></div>
+      <div class="lock-label" id="lockLabel"></div>
+
+      <button class="btn amber" id="submitCodeBtn" style="margin-top:12px;">잠금 해제</button>
+
+      <div class="sector-footer">
+        <button class="hint-link" id="hintBtn">🛰 백업 데이터 로그 요청</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. FINAL -->
+  <section class="screen" id="screen-final">
+    <div class="final-wrap">
+      <div class="intro-logo">K-STATION</div>
+      <div class="final-title">귀환 신호 발신 성공</div>
+      <div class="final-sub">SIGNAL SENT · MISSION COMPLETE</div>
+
+      <div class="final-stats">
+        <div class="stat-box"><div class="n" id="finalTeam">-</div><div class="l">TEAM</div></div>
+        <div class="stat-box"><div class="n" id="finalTime">-</div><div class="l">TOTAL TIME</div></div>
+      </div>
+
+      <div class="hud-frame recap">
+        <div class="eyebrow">임무 요약</div>
+        <div class="recap-item"><b>SECTOR 1</b><span>이온화 경향 차이가 전자를 밀어내는 힘, 곧 전압을 만든다.</span></div>
+        <div class="recap-item"><b>SECTOR 2-A</b><span>전지의 전압이 LED 구동전압보다 커야 불이 켜진다.</span></div>
+        <div class="recap-item"><b>SECTOR 2-B</b><span>청색 LED는 더 높은 구동전압이 필요하다.</span></div>
+        <div class="recap-item"><b>SECTOR 3</b><span>작은 전지를 여러 개 직렬로 연결하면 전압이 합쳐진다.</span></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="footnote">
+  ※ 본 화면은 프로토타입입니다. 복구 코드 검증·조원 기록은 데모용 하드코딩 로직이며,<br>
+  실 서비스 배포 시 Google Sheets / Apps Script 연동 로직으로 교체되어야 합니다.
+</div>
+
+<!-- Hint Quiz Modal -->
+<div class="modal-overlay" id="hintModal">
+  <div class="modal-box">
+    <button class="modal-close" id="hintModalClose">✕</button>
+    <div class="eyebrow">백업 데이터 로그 요청</div>
+    <div id="hintModalBody"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============ 백엔드 연동 설정 ============ */
+  // 배포 시 Google Apps Script 웹 앱 URL을 아래에 입력하세요 (backend-setup-guide.md 참고).
+  // 비워두면(빈 문자열) 백엔드 없이 로컬 데모 코드로만 동작합니다.
+  const WEB_APP_URL = '';
+
+  function todayStr(){ return new Date().toISOString().slice(0,10); }
+
+  async function apiPost(action, payload){
+    if(!WEB_APP_URL) return null;
+    try{
+      const res = await fetch(WEB_APP_URL, {
+        method: 'POST',
+        body: JSON.stringify(Object.assign({action: action}, payload))
+      });
+      return await res.json();
+    }catch(e){
+      console.warn('K-STATION backend error:', e);
+      return null;
+    }
+  }
+
+  /* ============ DATA ============ */
+  const SECTOR_KEYS = ['PROLOGUE','SECTOR1','SECTOR2A','SECTOR2B','SECTOR3'];
+  const MAP_ORDER = [
+    {key:'INTRO', label:'INTRO'},
+    {key:'PROLOGUE', label:'PROLOGUE'},
+    {key:'SECTOR1', label:'SEC.1'},
+    {key:'SECTOR2A', label:'SEC.2A'},
+    {key:'SECTOR2B', label:'SEC.2B'},
+    {key:'SECTOR3', label:'SEC.3'},
+    {key:'FINAL', label:'SIGNAL'}
+  ];
+
+  // NOTE: 데모용 하드코딩 코드표. 실제 구현 시 Google Sheets(Apps Script)에서
+  // 오늘 날짜 + 탐사팀 이름 기준으로 서버가 검증하도록 교체할 것 (명세서 5-1 참고).
+  const MISSIONS = {
+    SECTOR1: {
+      code: 'ANODE1',
+      title: 'SECTOR 1 · 침묵의 멜로디를 깨워라',
+      prep: ['바나나','간이 전극(구리·아연)','멜로디 키트'],
+      success: '✓ 성공 기준: 멜로디 키트에서 소리가 3초 이상 재생되면 성공',
+      concept: '두 금속의 이온화 경향 차이가 전자를 밀어내는 힘, 즉 전압을 만듭니다.',
+      quiz: {
+        q: '바나나에 꽂은 구리 전극과 아연 전극 중, 이온화 경향이 더 커서 전자를 잃고 산화되는 금속은 무엇일까요?',
+        options: ['구리','아연','둘 다 산화된다','둘 다 환원된다'],
+        correct: 1,
+        hint: '이온화 경향이 큰 금속일수록 전자를 잃고 산화전극(−극)이 됩니다. 두 전극 중 어느 쪽이 산화전극 역할을, 어느 쪽이 환원전극 역할을 하고 있는지 오늘 배운 개념으로 다시 짚어보세요.'
+      }
+    },
+    SECTOR2A: {
+      code: 'RED-07',
+      title: 'SECTOR 2-A · 붉은 신호를 켜라',
+      prep: ['바나나','간이 전극(구리·아연)','적색 LED'],
+      success: '✓ 성공 기준: 적색 LED 점등',
+      concept: 'LED가 켜지려면 전지의 전압이 LED 구동전압보다 커야 합니다.',
+      quiz: {
+        q: '화학전지에서 전류가 흐르려면 두 전극 사이에 무엇이 달라야 할까요?',
+        options: ['색깔','반응성(이온화 경향)','크기','온도'],
+        correct: 1,
+        hint: '전지가 만드는 전압은 두 전극 물질의 반응성 차이와 셀을 어떻게 배치했는지에 따라 달라집니다. 지금 전지가 LED를 켤 만큼의 전압을 내고 있는지 원리에 비추어 스스로 판단해보세요.'
+      }
+    },
+    SECTOR2B: {
+      code: 'BLUE-07',
+      title: 'SECTOR 2-B · 푸른 신호를 켜라',
+      prep: ['바나나(추가 셀 가능)','간이 전극','청색 LED'],
+      success: '✓ 성공 기준: 청색 LED 점등',
+      concept: '청색 LED는 적색보다 구동전압이 높아, 필요한 전압을 어떻게 확보할지 스스로 판단해야 합니다.',
+      quiz: {
+        q: '청색 LED와 적색 LED 중 구동전압이 더 높은 것은 무엇일까요?',
+        options: ['적색','청색','같다','정해져 있지 않다'],
+        correct: 1,
+        hint: '청색 LED는 적색보다 더 높은 전압이 필요합니다. 전지 여러 개를 연결하는 방식에 따라 전체 전압이 달라진다는 원리를 떠올리며, 필요한 전압을 어떻게 만들 수 있을지 스스로 생각해보세요.'
+      }
+    },
+    SECTOR3: {
+      code: 'VOLT-77',
+      title: 'SECTOR 3 · 시간을 되돌려라',
+      prep: ['구리판·아연판(참여 인원 수만큼)','집게 전선','전자시계','탐사팀원 여러 명'],
+      success: '✓ 성공 기준: 전자시계 작동(초침 움직임 확인)',
+      concept: '사람의 땀(전해질)과 서로 다른 금속의 접촉이 만드는 작은 전위차도, 여러 명을 직렬로 연결하면 전압이 합쳐져 전자시계를 작동시킬 수 있는 크기가 됩니다.',
+      quiz: {
+        q: '여러 사람이 손에 서로 다른 금속판을 번갈아 쥐고 사슬처럼 연결했을 때, 전자시계가 작동할 만큼의 전압을 만들 수 있는 이유는 무엇일까요?',
+        options: ['한 사람만으로도 이미 충분히 큰 전압이 만들어지기 때문','작은 전지들을 여러 개 직렬로 연결하면 전압이 합쳐지기 때문','사람의 체온이 전기를 만들어내기 때문','전자시계는 전압이 없어도 작동하기 때문'],
+        correct: 1,
+        hint: '전지를 여러 개 직렬로 연결하면 각 전지의 전압이 더해진다는 원리를 떠올려보세요. 지금 사람들이 만든 사슬이 이 원리에 맞게 구리판-아연판 순서로 제대로 연결되어 있는지 스스로 점검해보세요.'
+      }
+    }
+  };
+
+  const PROLOGUE_ANSWERS = {
+    blank: '큰',
+    cipher: 'ANODE',
+    finalCombo: ['SECTOR-A','ANODE','K-STATION']
+  };
+
+  /* ============ STATE ============ */
+  const STORAGE_KEY = 'kstation_volt_mission_v1';
+
+  function defaultState(){
+    return {
+      teamName: '',
+      members: [],
+      screen: 'intro',
+      startTime: null,
+      finishTime: null,
+      prologue: { cardIndex:0, blankSolved:false, cipherSolved:false, matchSolved:false, matchedPairs:[] },
+      sectors: {
+        SECTOR1:  mkSector(), SECTOR2A: mkSector(), SECTOR2B: mkSector(), SECTOR3: mkSector()
+      }
+    };
+  }
+  function mkSector(){
+    return { done:false, wrongAttempts:0, lockUntil:0, hint:{used:false, wrong:0, locked:false, revealed:false} };
+  }
+
+  let state = load();
+  function load(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return defaultState();
+      const parsed = JSON.parse(raw);
+      // merge to guard against missing keys from older versions
+      const d = defaultState();
+      return Object.assign(d, parsed, {
+        sectors: Object.assign(d.sectors, parsed.sectors || {}),
+        prologue: Object.assign(d.prologue, parsed.prologue || {})
+      });
+    }catch(e){ return defaultState(); }
+  }
+  function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+  function normalize(s){ return (s||'').toUpperCase().replace(/\s+/g,'').trim(); }
+
+  /* ============ VIEW / REVIEW STATE ============ */
+  // currentView: 화면에 실제로 표시 중인 화면 이름 (state.screen과 다를 수 있음 = 복습 중)
+  // isReview: true면 복습 모드(진행 상태를 바꾸는 조작 불가)
+  let currentView = state.screen;
+  let isReview = false;
+
+  /* ============ STATION MAP ============ */
+  function renderMap(){
+    const mapEl = document.getElementById('stationMap');
+    if(state.screen === 'intro'){ mapEl.classList.remove('show'); return; }
+    mapEl.classList.add('show');
+    document.getElementById('mapTeamName').textContent = state.teamName || '-';
+
+    const trueCurrentKey = screenToMapKey(state.screen);
+    const viewingKey = screenToMapKey(currentView);
+    const nodesEl = document.getElementById('mapNodes');
+    nodesEl.innerHTML = '';
+    MAP_ORDER.forEach((m, i) => {
+      const passed = isPassed(m.key);
+      const isCurrent = (m.key === trueCurrentKey);
+      const isViewing = (m.key === viewingKey);
+      const clickable = passed && m.key !== 'INTRO' && m.key !== trueCurrentKey;
+      const node = document.createElement('div');
+      node.className = 'node'
+        + (passed ? ' done' : '')
+        + (isCurrent ? ' current' : '')
+        + (isViewing ? ' viewing' : '')
+        + (clickable ? ' clickable' : '');
+      node.innerHTML = '<div class="dot"></div><div class="label">'+m.label+'</div>';
+      if(clickable){
+        node.title = '복습하기';
+        node.addEventListener('click', () => enterReview(m.key));
+      }
+      nodesEl.appendChild(node);
+      if(i < MAP_ORDER.length -1){
+        const line = document.createElement('div');
+        line.className = 'node-line' + (passed ? ' done' : '');
+        nodesEl.appendChild(line);
+      }
+    });
+  }
+  function mapKeyToScreen(key){
+    if(key === 'PROLOGUE') return 'prologue';
+    if(key === 'FINAL') return 'final';
+    return key;
+  }
+  function enterReview(mapKey){
+    showScreen(mapKeyToScreen(mapKey), {review:true});
+  }
+  function exitReview(){
+    showScreen(state.screen);
+  }
+  function screenToMapKey(scr){
+    if(scr === 'prologue') return 'PROLOGUE';
+    if(scr === 'final') return 'FINAL';
+    if(SECTOR_KEYS.includes(scr)) return scr;
+    return 'INTRO';
+  }
+  function isPassed(key){
+    if(key === 'INTRO') return true;
+    if(key === 'PROLOGUE') return !!state.prologueDoneFlag || screenPassedBeyond('PROLOGUE');
+    if(SECTOR_KEYS.includes(key)) return state.sectors[key] && state.sectors[key].done;
+    if(key === 'FINAL') return state.screen === 'final';
+    return false;
+  }
+  function screenPassedBeyond(key){
+    const order = ['intro','prologue','SECTOR1','SECTOR2A','SECTOR2B','SECTOR3','final'];
+    return order.indexOf(state.screen) > order.indexOf(key === 'PROLOGUE' ? 'prologue' : key);
+  }
+
+  let clockTimer = null;
+  function tickClock(){
+    if(!state.startTime) return;
+    const el = document.getElementById('mapClock');
+    const diff = Math.max(0, Date.now() - state.startTime);
+    el.textContent = fmtDuration(diff);
+  }
+  function fmtDuration(ms){
+    const s = Math.floor(ms/1000);
+    const m = Math.floor(s/60);
+    const ss = (s%60).toString().padStart(2,'0');
+    return m.toString().padStart(2,'0') + ':' + ss;
+  }
+
+  /* ============ SCREEN ROUTER ============ */
+  // opts.review = true 이면 진행 상태(state.screen)는 바꾸지 않고 화면만 보여준다(복습 모드).
+  function showScreen(name, opts){
+    opts = opts || {};
+    isReview = !!opts.review;
+    currentView = name;
+    if(!isReview){
+      state.screen = name;
+      save();
+    }
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const map = { intro:'screen-intro', prologue:'screen-prologue', final:'screen-final' };
+    const id = SECTOR_KEYS.includes(name) ? 'screen-sector' : (map[name] || 'screen-intro');
+    document.getElementById(id).classList.add('active');
+    renderMap();
+    if(SECTOR_KEYS.includes(name)) renderSector(name);
+    if(name === 'prologue') renderCard();
+    if(name === 'final' && !isReview) renderFinal();
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+
+  /* ============ 0. INTRO ============ */
+  const INTRO_TEXT = "서기 2087년, 소형 연구위성 K-STATION은 태양풍의 영향으로\n주 전력망이 완전히 파손되었다.\n\n남은 것은 비상용 화학전지 키트뿐.\n탐사팀은 각 구역의 장비를 화학전지로 하나씩 복구해야만\n지구로 귀환 신호를 보낼 수 있다.\n\n제한된 자원으로, 지금부터 임무를 시작한다.";
+
+  function typeIntro(){
+    const el = document.getElementById('typeText');
+    let i = 0;
+    el.innerHTML = '';
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    function step(){
+      if(i <= INTRO_TEXT.length){
+        el.textContent = INTRO_TEXT.slice(0, i);
+        el.appendChild(cursor);
+        i++;
+        setTimeout(step, 18);
+      } else {
+        document.getElementById('introForm').classList.add('show');
+      }
+    }
+    step();
+  }
+
+  function renderMemberRows(){
+    const wrap = document.getElementById('memberRows');
+    wrap.innerHTML = '';
+    state.members.forEach((m, idx) => {
+      const row = document.createElement('div');
+      row.className = 'member-row';
+      row.innerHTML = '<input type="text" value="'+escapeHtml(m)+'" placeholder="조원 이름" data-idx="'+idx+'">'+
+                       '<button type="button" class="icon-btn" data-idx="'+idx+'">✕</button>';
+      wrap.appendChild(row);
+    });
+    wrap.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('input', e => {
+        state.members[+e.target.dataset.idx] = e.target.value;
+        save();
+      });
+    });
+    wrap.querySelectorAll('.icon-btn').forEach(b => {
+      b.addEventListener('click', e => {
+        state.members.splice(+e.target.dataset.idx, 1);
+        renderMemberRows();
+        save();
+      });
+    });
+  }
+  function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  document.getElementById('addMemberBtn').addEventListener('click', () => {
+    state.members.push('');
+    renderMemberRows();
+    save();
+  });
+  document.getElementById('teamNameInput').addEventListener('input', e => {
+    state.teamName = e.target.value;
+    save();
+  });
+  document.getElementById('startBtn').addEventListener('click', () => {
+    if(!state.teamName || !state.teamName.trim()){
+      alert('탐사팀 이름을 입력해주세요.');
+      return;
+    }
+    if(!state.startTime) state.startTime = Date.now();
+    save();
+    apiPost('registerTeam', { date: todayStr(), teamName: state.teamName, members: state.members });
+    showScreen('prologue');
+  });
+
+  /* ============ 1. PROLOGUE CARDS ============ */
+  const CARD_COUNT = 7;
+  let reviewCardIndex = 0;
+  function canAdvance(idx){
+    if(isReview) return true; // 복습 모드에서는 이미 모두 해결된 상태이므로 자유롭게 이동
+    if(idx === 2) return state.prologue.blankSolved;   // card index 2 = 카드3
+    if(idx === 4) return state.prologue.cipherSolved;  // card index 4 = 카드5
+    if(idx === 5) return state.prologue.matchSolved;   // card index 5 = 카드6
+    return true;
+  }
+  function getCardIndex(){ return isReview ? reviewCardIndex : state.prologue.cardIndex; }
+  function setCardIndex(v){ if(isReview) reviewCardIndex = v; else { state.prologue.cardIndex = v; save(); } }
+  function renderCardProgress(){
+    const wrap = document.getElementById('cardProgress');
+    wrap.innerHTML = '';
+    const cur = getCardIndex();
+    for(let i=0;i<CARD_COUNT;i++){
+      const dot = document.createElement('span');
+      if(i === cur) dot.className='active';
+      else if(i < cur) dot.className='past';
+      wrap.appendChild(dot);
+    }
+  }
+  function renderCard(){
+    const banner = document.getElementById('prologueReviewBanner');
+    if(isReview){
+      banner.style.display = 'flex';
+      reviewCardIndex = 0;
+    } else {
+      banner.style.display = 'none';
+    }
+    renderCardProgress();
+    const idx = getCardIndex();
+    const slide = document.getElementById('cardSlide');
+    document.getElementById('cardPrevBtn').disabled = (idx === 0);
+    document.getElementById('cardNextBtn').style.display = (idx === 6) ? 'none' : 'inline-flex';
+
+    const templates = [cardConcept1, cardConcept2, cardBlank, cardConcept3, cardCipher, cardMatch, cardCombo];
+    slide.innerHTML = '';
+    slide.appendChild(templates[idx]());
+    document.getElementById('cardNextBtn').disabled = !canAdvance(idx);
+  }
+
+  function cardWrap(eyebrow, title){
+    const div = document.createElement('div');
+    div.innerHTML = '<div class="eyebrow">'+eyebrow+'</div><h2>'+title+'</h2>';
+    return div;
+  }
+
+  function cardConcept1(){
+    const el = cardWrap('개념 1 / 7', '전자 이동과 산화·환원');
+    el.innerHTML += '<p>산화: 전자를 <strong>잃는</strong> 반응 &nbsp;/&nbsp; 환원: 전자를 <strong>얻는</strong> 반응</p>' +
+      '<div class="fragment-box" style="color:var(--text); border-style:solid; border-color:var(--border);">예) 2H⁺ + Mg → H₂ + Mg²⁺<br><span style="color:var(--text-dim); font-size:11px;">Mg는 전자를 잃고 산화, H⁺는 전자를 얻어 환원</span></div>';
+    return el;
+  }
+  function cardConcept2(){
+    const el = cardWrap('개념 2 / 7', '금속의 이온화 경향');
+    el.innerHTML += '<p>이온화 경향 순서:</p>' +
+      '<div class="fragment-box" style="color:var(--text); border-style:solid; border-color:var(--border); font-size:12px; letter-spacing:1px;">K &gt; Ca &gt; Na &gt; Mg &gt; Al &gt; Zn &gt; Fe &gt; Ni &gt; Sn &gt; Pb &gt; (H) &gt; Cu &gt; Hg &gt; Ag &gt; Pt &gt; Au</div>' +
+      '<p style="margin-top:12px;">이온화 경향이 큰 금속일수록 전자를 잃고 <strong>산화</strong>되기 쉽다(반응성이 크다).</p>' +
+      '<p style="font-size:12.5px;">탐구 예시: 황산 구리(Ⅱ) 수용액에 아연을 넣으면 아연이 산화되고 구리가 석출된다 (Zn &gt; Cu)</p>';
+    return el;
+  }
+  function cardBlank(){
+    const el = cardWrap('과제 · 빈칸 채우기 (3 / 7)', '매뉴얼 손상 구간 복원');
+    el.innerHTML += '<p>"이온화 경향이 (　　) 금속일수록 전자를 잃고 산화되기 쉽다."</p>';
+    const row = document.createElement('div');
+    row.className = 'choice-row';
+    ['큰','작은'].forEach(opt => {
+      const b = document.createElement('button');
+      b.className = 'choice-btn';
+      b.textContent = opt;
+      b.addEventListener('click', () => {
+        if(opt === PROLOGUE_ANSWERS.blank){
+          b.classList.add('correct');
+          state.prologue.blankSolved = true;
+          save();
+          document.getElementById('cardNextBtn').disabled = false;
+          const frag = document.createElement('div');
+          frag.className = 'fragment-box';
+          frag.textContent = '복구 코드 조각 ① 획득 : SECTOR-A';
+          el.appendChild(frag);
+          row.querySelectorAll('button').forEach(x=>x.disabled=true);
+        } else {
+          b.classList.add('wrong');
+          setTimeout(()=>b.classList.remove('wrong'), 400);
+        }
+      });
+      row.appendChild(b);
+    });
+    el.appendChild(row);
+    if(state.prologue.blankSolved){
+      row.querySelectorAll('button').forEach(x=>{x.disabled=true; if(x.textContent===PROLOGUE_ANSWERS.blank) x.classList.add('correct');});
+      const frag = document.createElement('div');
+      frag.className = 'fragment-box';
+      frag.textContent = '복구 코드 조각 ① 획득 : SECTOR-A';
+      el.appendChild(frag);
+    }
+    return el;
+  }
+  function cardConcept3(){
+    const el = cardWrap('개념 3 / 7', '화학전지(볼타 전지)의 구조와 원리');
+    el.innerHTML += '<p>두 금속을 전해질 수용액에 넣고 도선으로 연결한 장치</p>' +
+      '<p>(−)극(산화전극): 반응성이 큰 금속, 전자를 잃음<br>(+)극(환원전극): 반응성이 작은 금속, 전해질의 양이온이 전자를 얻음</p>' +
+      '<p style="color:var(--cyan);">전자는 (−)극 → (+)극으로 이동, 전류는 (+)극 → (−)극으로 흐른다.</p>';
+    return el;
+  }
+  function cardCipher(){
+    const el = cardWrap('과제 · 치환 암호 (5 / 7)', '단자 표식 해독');
+    el.innerHTML += '<p>치환표: A=1, B=2, C=3 … (알파벳 순서대로)</p>';
+    const box = document.createElement('div');
+    box.className = 'cipher-box';
+    box.textContent = '1 - 14 - 15 - 4 - 5';
+    el.appendChild(box);
+    const field = document.createElement('div');
+    field.className = 'field';
+    field.innerHTML = '<label>해독한 단어 입력</label><input type="text" id="cipherInput" placeholder="영단어를 입력하세요">';
+    el.appendChild(field);
+    const btn = document.createElement('button');
+    btn.className = 'btn'; btn.textContent = '해독 확인';
+    const fb = document.createElement('div'); fb.className='feedback';
+    btn.addEventListener('click', () => {
+      const val = normalize(document.getElementById('cipherInput').value);
+      if(val === PROLOGUE_ANSWERS.cipher){
+        state.prologue.cipherSolved = true; save();
+        fb.className='feedback ok'; fb.textContent='해독 성공';
+        document.getElementById('cardNextBtn').disabled = false;
+        const frag = document.createElement('div');
+        frag.className='fragment-box';
+        frag.textContent = '복구 코드 조각 ② 획득 : ANODE';
+        el.appendChild(frag);
+      } else {
+        fb.className='feedback err'; fb.textContent='틀렸습니다. 다시 시도해보세요.';
+      }
+    });
+    el.appendChild(btn); el.appendChild(fb);
+    if(state.prologue.cipherSolved){
+      const frag = document.createElement('div');
+      frag.className='fragment-box';
+      frag.textContent = '복구 코드 조각 ② 획득 : ANODE';
+      el.appendChild(frag);
+    }
+    return el;
+  }
+  const MATCH_PAIRS = [
+    {t:'산화전극(−극)', d:'반응성이 큰 금속, 전자를 잃는 전극'},
+    {t:'환원전극(+극)', d:'반응성이 작은 금속, 전자를 얻는 전극'},
+    {t:'전해질', d:'전극과 접촉하여 이온이 이동하는 수용액'},
+    {t:'이온화 경향', d:'금속이 전자를 잃고 양이온이 되려는 경향'}
+  ];
+  function cardMatch(){
+    const el = cardWrap('과제 · 개념 매칭 (6 / 7)', '단자 매뉴얼 대조');
+    el.innerHTML += '<p>왼쪽 용어와 오른쪽 정의를 순서대로 클릭해 짝지으세요.</p>';
+    const grid = document.createElement('div');
+    grid.className = 'match-grid';
+    const terms = MATCH_PAIRS.map(p=>p.t);
+    const defs = shuffleStable(MATCH_PAIRS.map(p=>p.d));
+    let selectedTerm = null;
+    const matched = new Set(state.prologue.matchedPairs || []);
+
+    function renderGrid(){
+      grid.innerHTML = '';
+      terms.forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'match-item' + (matched.has(t) ? ' matched' : '') + (selectedTerm===t ? ' selected':'');
+        item.textContent = t;
+        item.dataset.term = t;
+        if(!matched.has(t)){
+          item.addEventListener('click', () => { selectedTerm = t; renderGrid(); });
+        }
+        grid.appendChild(item);
+      });
+      defs.forEach(d => {
+        const correctTerm = MATCH_PAIRS.find(p=>p.d===d).t;
+        const item = document.createElement('div');
+        item.className = 'match-item' + (matched.has(correctTerm) ? ' matched' : '');
+        item.textContent = d;
+        if(!matched.has(correctTerm)){
+          item.addEventListener('click', () => {
+            if(!selectedTerm) return;
+            if(selectedTerm === correctTerm){
+              matched.add(correctTerm);
+              state.prologue.matchedPairs = Array.from(matched);
+              selectedTerm = null;
+              if(matched.size === MATCH_PAIRS.length){
+                state.prologue.matchSolved = true;
+                document.getElementById('cardNextBtn').disabled = false;
+                const frag = document.createElement('div');
+                frag.className='fragment-box';
+                frag.textContent = '복구 코드 조각 ③ 획득 : K-STATION';
+                el.appendChild(frag);
+              }
+              save();
+              renderGrid();
+            } else {
+              item.classList.add('wrongflash');
+              setTimeout(()=>item.classList.remove('wrongflash'), 400);
+              selectedTerm = null;
+            }
+          });
+        }
+        grid.appendChild(item);
+      });
+    }
+    renderGrid();
+    el.appendChild(grid);
+    if(state.prologue.matchSolved){
+      const frag = document.createElement('div');
+      frag.className='fragment-box';
+      frag.textContent = '복구 코드 조각 ③ 획득 : K-STATION';
+      el.appendChild(frag);
+    }
+    return el;
+  }
+  function shuffleStable(arr){
+    // deterministic-ish shuffle (not persisted, fine for prototype)
+    return arr.slice().sort((a,b)=> a.length - b.length ? 0 : 0).reverse();
+  }
+  function cardCombo(){
+    const el = cardWrap('PROLOGUE 통과 (7 / 7)', '복구 코드 조합');
+    if(isReview){
+      el.innerHTML += '<p>이미 이 자료실을 통과했습니다. 아래는 그때 조합했던 복구 코드 조각입니다.</p>';
+      const frags = document.createElement('div');
+      frags.className = 'combo-frags';
+      PROLOGUE_ANSWERS.finalCombo.forEach(f => {
+        const span = document.createElement('span'); span.textContent = f; frags.appendChild(span);
+      });
+      el.appendChild(frags);
+      const done = document.createElement('div');
+      done.className = 'fragment-box';
+      done.style.borderStyle = 'solid'; done.style.borderColor = 'var(--green)'; done.style.color = 'var(--green)';
+      done.textContent = '✓ 승인됨 · 장비 매뉴얼 확보 완료';
+      el.appendChild(done);
+      return el;
+    }
+    el.innerHTML += '<p>지금까지 얻은 3개의 조각을 순서대로 입력하세요 (띄어쓰기로 구분).</p>';
+    const frags = document.createElement('div');
+    frags.className = 'combo-frags';
+    PROLOGUE_ANSWERS.finalCombo.forEach(f => {
+      const span = document.createElement('span'); span.textContent = f; frags.appendChild(span);
+    });
+    el.appendChild(frags);
+    const field = document.createElement('div'); field.className='field';
+    field.innerHTML = '<label>PROLOGUE 통과 코드</label><input type="text" id="comboInput" placeholder="예) SECTOR-A ANODE K-STATION">';
+    el.appendChild(field);
+    const btn = document.createElement('button'); btn.className='btn'; btn.textContent='코드 제출';
+    const fb = document.createElement('div'); fb.className='feedback';
+    btn.addEventListener('click', () => {
+      const val = normalize(document.getElementById('comboInput').value);
+      const answer = normalize(PROLOGUE_ANSWERS.finalCombo.join(''));
+      if(val === answer){
+        fb.className='feedback ok'; fb.textContent='승인됨 · 장비 매뉴얼 확보';
+        state.prologueDoneFlag = true; save();
+        btn.disabled = true;
+        apiPost('advanceStage', { date: todayStr(), teamName: state.teamName, fromStage:'PROLOGUE', toStage:'SECTOR1' });
+        setTimeout(()=> showScreen('SECTOR1'), 900);
+      } else {
+        fb.className='feedback err'; fb.textContent='코드가 일치하지 않습니다.';
+      }
+    });
+    el.appendChild(btn); el.appendChild(fb);
+    return el;
+  }
+
+  document.getElementById('cardNextBtn').addEventListener('click', () => {
+    const idx = getCardIndex();
+    if(idx < CARD_COUNT-1){ setCardIndex(idx+1); renderCard(); }
+  });
+  document.getElementById('cardPrevBtn').addEventListener('click', () => {
+    const idx = getCardIndex();
+    if(idx > 0){ setCardIndex(idx-1); renderCard(); }
+  });
+  document.getElementById('prologueBackBtn').addEventListener('click', exitReview);
+
+  /* ============ 2. SECTOR SCREENS ============ */
+  let lockTimerHandle = null;
+  function renderSector(key){
+    const m = MISSIONS[key];
+    const sec = state.sectors[key];
+    document.getElementById('sectorEyebrow').textContent = key.replace('SECTOR','SECTOR ');
+    document.getElementById('sectorTitle').textContent = m.title;
+    document.getElementById('sectorPrep').innerHTML = m.prep.map(p=>'<span class="prep-chip">'+p+'</span>').join('');
+    document.getElementById('sectorSuccess').textContent = m.success;
+    document.getElementById('sectorConcept').textContent = m.concept;
+
+    const banner = document.getElementById('sectorReviewBanner');
+    const approvalNote = document.getElementById('approvalNote');
+    const codeWrap = document.getElementById('codeEntryWrap');
+    const feedback = document.getElementById('codeFeedback');
+    const lockBar = document.getElementById('lockBar');
+    const lockLabel = document.getElementById('lockLabel');
+    const submitBtn = document.getElementById('submitCodeBtn');
+    const footer = document.querySelector('#screen-sector .sector-footer');
+
+    clearInterval(lockTimerHandle);
+
+    if(isReview){
+      // 복습 모드: 이미 통과한 구역을 다시 살펴보기만 함. 코드 입력/힌트 조작 불가.
+      banner.style.display = 'flex';
+      approvalNote.style.display = 'none';
+      codeWrap.style.display = 'none';
+      feedback.style.display = 'none';
+      lockBar.classList.remove('show');
+      lockLabel.classList.remove('show');
+      submitBtn.style.display = 'none';
+      footer.style.display = 'none';
+    } else {
+      banner.style.display = 'none';
+      approvalNote.style.display = '';
+      codeWrap.style.display = '';
+      feedback.style.display = '';
+      submitBtn.style.display = '';
+      footer.style.display = '';
+
+      document.getElementById('codeInput').value = '';
+      feedback.textContent = '';
+      feedback.className = 'feedback';
+
+      updateLockUI(key);
+
+      submitBtn.onclick = () => submitCode(key);
+      document.getElementById('codeInput').onkeydown = (e) => { if(e.key === 'Enter') submitCode(key); };
+      document.getElementById('hintBtn').onclick = () => openHint(key);
+    }
+  }
+  document.getElementById('sectorBackBtn').addEventListener('click', exitReview);
+
+  function updateLockUI(key){
+    const sec = state.sectors[key];
+    const remain = sec.lockUntil - Date.now();
+    const input = document.getElementById('codeInput');
+    const submitBtn = document.getElementById('submitCodeBtn');
+    const bar = document.getElementById('lockBar');
+    const barInner = document.getElementById('lockBarInner');
+    const label = document.getElementById('lockLabel');
+
+    if(remain > 0){
+      input.disabled = true; submitBtn.disabled = true;
+      bar.classList.add('show'); label.classList.add('show');
+      const total = 30000;
+      function tick(){
+        const r = Math.max(0, sec.lockUntil - Date.now());
+        barInner.style.width = (r/total*100)+'%';
+        label.textContent = '재입력 대기 중 · ' + Math.ceil(r/1000) + '초';
+        if(r <= 0){
+          clearInterval(lockTimerHandle);
+          input.disabled = false; submitBtn.disabled = false;
+          bar.classList.remove('show'); label.classList.remove('show');
+        }
+      }
+      tick();
+      lockTimerHandle = setInterval(tick, 200);
+    } else {
+      input.disabled = false; submitBtn.disabled = false;
+      bar.classList.remove('show'); label.classList.remove('show');
+    }
+  }
+
+  async function submitCode(key){
+    const sec = state.sectors[key];
+    if(Date.now() < sec.lockUntil) return;
+    const input = document.getElementById('codeInput');
+    const rawVal = input.value;
+    const fb = document.getElementById('codeFeedback');
+    const wrap = document.getElementById('codeEntryWrap');
+    const submitBtn = document.getElementById('submitCodeBtn');
+
+    let isCorrect;
+    if(WEB_APP_URL){
+      submitBtn.disabled = true;
+      const res = await apiPost('verifyCode', { date: todayStr(), teamName: state.teamName, stage: key, inputCode: rawVal });
+      submitBtn.disabled = false;
+      if(!res){
+        fb.className = 'feedback err'; fb.textContent = '백엔드에 연결할 수 없습니다. 네트워크를 확인하세요.';
+        return;
+      }
+      if(!res.ok && res.error){
+        fb.className = 'feedback err'; fb.textContent = res.error;
+        return;
+      }
+      isCorrect = !!res.ok;
+    } else {
+      isCorrect = normalize(rawVal) === normalize(MISSIONS[key].code);
+    }
+
+    if(isCorrect){
+      fb.className = 'feedback ok'; fb.textContent = '승인됨 · 잠금 해제';
+      sec.done = true; save();
+      submitBtn.disabled = true;
+      input.disabled = true;
+      setTimeout(() => goNextSector(key), 900);
+    } else {
+      sec.wrongAttempts++;
+      sec.lockUntil = Date.now() + 30000;
+      save();
+      fb.className = 'feedback err'; fb.textContent = '코드가 올바르지 않습니다.';
+      wrap.classList.add('shake');
+      setTimeout(()=>wrap.classList.remove('shake'), 400);
+      updateLockUI(key);
+    }
+  }
+
+  function goNextSector(key){
+    const idx = SECTOR_KEYS.indexOf(key);
+    if(idx < SECTOR_KEYS.length - 1){
+      showScreen(SECTOR_KEYS[idx+1]);
+    } else {
+      state.finishTime = Date.now(); save();
+      showScreen('final');
+    }
+  }
+
+  /* ============ HINT QUIZ MODAL ============ */
+  function openHint(key){
+    const m = MISSIONS[key];
+    const sec = state.sectors[key];
+    const body = document.getElementById('hintModalBody');
+    body.innerHTML = '';
+
+    if(sec.hint.locked){
+      body.innerHTML = '<div class="locked-msg">백업 데이터 로그 접근이 제한되었습니다.<br>관제센터(선생님)에게 직접 문의하세요.</div>';
+    } else if(sec.hint.revealed){
+      body.innerHTML = '<div class="quiz-q">'+m.quiz.q+'</div><div class="hint-reveal">'+m.quiz.hint+'</div>';
+    } else {
+      const qEl = document.createElement('div');
+      qEl.className = 'quiz-q';
+      qEl.textContent = m.quiz.q;
+      body.appendChild(qEl);
+      const row = document.createElement('div');
+      row.style.display = 'grid'; row.style.gap = '8px';
+      m.quiz.options.forEach((opt, i) => {
+        const b = document.createElement('button');
+        b.className = 'choice-btn';
+        b.style.textAlign = 'left';
+        b.textContent = (i+1)+'. '+opt;
+        b.addEventListener('click', () => {
+          if(i === m.quiz.correct){
+            sec.hint.revealed = true; sec.hint.used = true; save();
+            openHint(key);
+          } else {
+            sec.hint.wrong++;
+            if(sec.hint.wrong >= 3){
+              sec.hint.locked = true;
+              apiPost('hintResult', { date: todayStr(), teamName: state.teamName, stage: key, locked: true });
+            }
+            save();
+            b.classList.add('wrong');
+            setTimeout(()=>b.classList.remove('wrong'), 400);
+            renderAttempts();
+          }
+        });
+        row.appendChild(b);
+      });
+      body.appendChild(row);
+      const att = document.createElement('div');
+      att.className = 'quiz-attempts';
+      att.id = 'quizAttempts';
+      body.appendChild(att);
+      renderAttempts();
+    }
+    document.getElementById('hintModal').classList.add('show');
+
+    function renderAttempts(){
+      const att = document.getElementById('quizAttempts');
+      if(att) att.textContent = '오답 ' + sec.hint.wrong + ' / 3';
+    }
+  }
+  document.getElementById('hintModalClose').addEventListener('click', () => {
+    document.getElementById('hintModal').classList.remove('show');
+  });
+  document.getElementById('hintModal').addEventListener('click', (e) => {
+    if(e.target.id === 'hintModal') document.getElementById('hintModal').classList.remove('show');
+  });
+
+  /* ============ 3. FINAL SCREEN ============ */
+  function renderFinal(){
+    document.getElementById('finalTeam').textContent = state.teamName || '-';
+    const dur = (state.finishTime && state.startTime) ? state.finishTime - state.startTime : 0;
+    document.getElementById('finalTime').textContent = fmtDuration(dur);
+    launchConfetti();
+  }
+
+  /* ============ CONFETTI (vanilla canvas, no audio) ============ */
+  const canvas = document.getElementById('confettiCanvas');
+  const ctx = canvas.getContext('2d');
+  let confettiParticles = [];
+  let confettiRunning = false;
+  function resizeCanvas(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  function launchConfetti(){
+    const colors = ['#4ee3c8','#ffb454','#35e58a','#ff4f5e','#e7f3f5'];
+    confettiParticles = [];
+    for(let i=0;i<140;i++){
+      confettiParticles.push({
+        x: Math.random()*canvas.width,
+        y: -20 - Math.random()*canvas.height*0.5,
+        size: 4 + Math.random()*5,
+        speedY: 2 + Math.random()*3,
+        speedX: -1.5 + Math.random()*3,
+        rot: Math.random()*360,
+        rotSpeed: -6 + Math.random()*12,
+        color: colors[Math.floor(Math.random()*colors.length)]
+      });
+    }
+    if(!confettiRunning){ confettiRunning = true; requestAnimationFrame(confettiLoop); }
+    setTimeout(()=>{ confettiRunning = false; }, 6000);
+  }
+  function confettiLoop(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    confettiParticles.forEach(p => {
+      p.y += p.speedY; p.x += p.speedX; p.rot += p.rotSpeed;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot*Math.PI/180);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size*0.6);
+      ctx.restore();
+    });
+    confettiParticles = confettiParticles.filter(p => p.y < canvas.height + 30);
+    if(confettiRunning || confettiParticles.length){
+      requestAnimationFrame(confettiLoop);
+    } else {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+    }
+  }
+
+  /* ============ CLOCK TICK ============ */
+  setInterval(tickClock, 1000);
+
+  /* ============ INIT (resume from localStorage) ============ */
+  function init(){
+    document.getElementById('teamNameInput').value = state.teamName || '';
+    renderMemberRows();
+
+    if(state.screen === 'intro'){
+      typeIntro();
+      showScreen('intro');
+    } else {
+      // resume mid-flow
+      showScreen(state.screen);
+    }
+  }
+  init();
+
+})();
+</script>
+
+</body>
+</html>
