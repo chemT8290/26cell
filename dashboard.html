@@ -246,7 +246,12 @@
   const DEMO_PASSWORD = 'CONTROL2026'; // 데모 모드 전용 (URL 미설정 시에만 사용)
   const URL_STORAGE_KEY = 'kstation_dashboard_url';
 
-  let WEB_APP_URL = localStorage.getItem(URL_STORAGE_KEY) || '';
+  // 매번 화면에서 URL을 입력하기 귀찮다면, 아래에 배포된 Apps Script 웹 앱 URL을
+  // 직접 붙여넣으세요. 이 값을 채워두면 브라우저/기기와 상관없이 항상 자동으로 연결됩니다.
+  // (화면의 ⚙ 설정에서 다른 URL을 저장하면 그쪽이 우선 적용됩니다.)
+  const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzbrDysVyShAsKD9JRnh579bR76YkrawNjGhlnt50dCRyM0ajTxZBgoc9hcrkoz1sJD6g/exec';
+
+  let WEB_APP_URL = localStorage.getItem(URL_STORAGE_KEY) || DEFAULT_WEB_APP_URL;
   let liveMode = !!WEB_APP_URL;
   let sessionToken = null;
   let teams = [];
