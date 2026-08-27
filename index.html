@@ -245,12 +245,13 @@
   .footnote{font-family:var(--font-mono); font-size:10.5px; color:#425663; text-align:center; margin-top:26px; line-height:1.7;}
 
   .dashboard-link{
-    position:fixed; bottom:14px; right:14px; z-index:250;
-    width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-    background:rgba(14,22,32,0.6); border:1px solid var(--border-bright); color:var(--text-dim);
-    text-decoration:none; font-size:15px; opacity:.4; transition:opacity .2s, color .2s, border-color .2s;
+    position:fixed; bottom:16px; right:16px; z-index:250;
+    width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    background:rgba(14,22,32,0.85); border:1px solid var(--cyan-dim); color:var(--text-dim);
+    text-decoration:none; font-size:18px; opacity:.75; box-shadow:0 0 10px rgba(0,0,0,0.4);
+    transition:opacity .2s, color .2s, border-color .2s, box-shadow .2s;
   }
-  .dashboard-link:hover{ opacity:1; color:var(--cyan); border-color:var(--cyan); }
+  .dashboard-link:hover{ opacity:1; color:var(--cyan); border-color:var(--cyan); box-shadow:0 0 14px rgba(78,227,200,.5); }
 </style>
 </head>
 <body>
@@ -375,10 +376,10 @@
 </div>
 
 <div class="footnote">
-
+  ※ 2026학년도 인천남고등학교 3학년 화학Ⅱ 수업용
 </div>
 
-<a href="dashboard.html" class="dashboard-link" title="관제센터 모니터" target="_blank" rel="noopener">🛰</a>
+<a href="dashboard.html" class="dashboard-link" title="관제센터 모니터" target="_blank" rel="noopener">⚙</a>
 
 <!-- Hint Quiz Modal -->
 <div class="modal-overlay" id="hintModal">
