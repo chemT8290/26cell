@@ -367,8 +367,7 @@
 </div>
 
 <div class="footnote">
-  ※ 본 화면은 프로토타입입니다. 복구 코드 검증·조원 기록은 데모용 하드코딩 로직이며,<br>
-  실 서비스 배포 시 Google Sheets / Apps Script 연동 로직으로 교체되어야 합니다.
+
 </div>
 
 <!-- Hint Quiz Modal -->
@@ -387,7 +386,7 @@
   /* ============ 백엔드 연동 설정 ============ */
   // 배포 시 Google Apps Script 웹 앱 URL을 아래에 입력하세요 (backend-setup-guide.md 참고).
   // 비워두면(빈 문자열) 백엔드 없이 로컬 데모 코드로만 동작합니다.
-  const WEB_APP_URL = '';
+  const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzbrDysVyShAsKD9JRnh579bR76YkrawNjGhlnt50dCRyM0ajTxZBgoc9hcrkoz1sJD6g/exec';
 
   function todayStr(){ return new Date().toISOString().slice(0,10); }
 
