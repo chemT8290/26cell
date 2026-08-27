@@ -243,6 +243,14 @@
   .recap-item b{color:var(--cyan); font-family:var(--font-mono); font-size:11px; flex-shrink:0; width:76px;}
 
   .footnote{font-family:var(--font-mono); font-size:10.5px; color:#425663; text-align:center; margin-top:26px; line-height:1.7;}
+
+  .dashboard-link{
+    position:fixed; bottom:14px; right:14px; z-index:250;
+    width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    background:rgba(14,22,32,0.6); border:1px solid var(--border-bright); color:var(--text-dim);
+    text-decoration:none; font-size:15px; opacity:.4; transition:opacity .2s, color .2s, border-color .2s;
+  }
+  .dashboard-link:hover{ opacity:1; color:var(--cyan); border-color:var(--cyan); }
 </style>
 </head>
 <body>
@@ -369,6 +377,8 @@
 <div class="footnote">
 
 </div>
+
+<a href="dashboard.html" class="dashboard-link" title="관제센터 모니터" target="_blank" rel="noopener">🛰</a>
 
 <!-- Hint Quiz Modal -->
 <div class="modal-overlay" id="hintModal">
